@@ -3,6 +3,9 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
+import * as yup from "yup";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -18,19 +21,79 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+type RegisterFormData = {
+  name: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+};
+
+const registerSchema = yup.object({
+name: yup
+  .string()
+  .trim()
+  .min(3, "Full name must be at least 3 characters")
+  .matches(/^[A-Za-z\s]+$/, "Full name can only contain letters and spaces")
+  .required("Full name is required"),
+
+  email: yup
+    .string()
+    .trim()
+    .email("Enter a valid email address")
+    .required("Email address is required"),
+
+password: yup
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
+  .matches(/[a-z]/, "Password must contain at least one lowercase letter")
+  .matches(/[0-9]/, "Password must contain at least one number")
+  .matches(
+    /[^A-Za-z0-9]/,
+    "Password must contain at least one special character"
+  )
+  .required("Password is required"),
+
+  confirmPassword: yup
+    .string()
+    .oneOf([yup.ref("password")], "Passwords do not match")
+    .required("Confirm password is required"),
+});
+
 export default function RegisterScreen() {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<RegisterFormData>({
+    resolver: yupResolver(registerSchema),
+
+    mode: "onTouched",
+    reValidateMode: "onChange",
+
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleRegister = () => {
-    // Frontend navigation / action placeholder for upcoming backend integration
-    router.push("/users");
+const handleRegister = (data: RegisterFormData) => {
+  const cleanedData = {
+    name: data.name.trim(),
+    email: data.email.trim().toLowerCase(),
+    password: data.password,
   };
+
+  console.log("Register form data:", cleanedData);
+
+  // Temporary navigation until backend integration
+  router.push("/users");
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -65,113 +128,200 @@ export default function RegisterScreen() {
           {/* Form Fields Section */}
           <View style={styles.formSection}>
             {/* Full Name Input */}
-            <View style={styles.inputContainer}>
-              <Feather
-                name="user"
-                size={20}
-                color="#5C6988"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Full Name"
-                placeholderTextColor="#7B88A4"
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-                returnKeyType="next"
-              />
-            </View>
+            <Controller
+              control={control}
+              name="name"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      errors.name && styles.inputError,
+                    ]}
+                  >
+                    <Feather
+                      name="user"
+                      size={20}
+                      color="#5C6988"
+                      style={styles.inputIcon}
+                    />
+
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Full Name"
+                      placeholderTextColor="#7B88A4"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      autoCapitalize="words"
+                      returnKeyType="next"
+                    />
+                  </View>
+
+                  {errors.name && (
+                    <Text style={styles.errorText}>
+                      {errors.name.message}
+                    </Text>
+                  )}
+                </>
+              )}
+            />
 
             {/* Email Address Input */}
-            <View style={styles.inputContainer}>
-              <Feather
-                name="mail"
-                size={20}
-                color="#5C6988"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Email Address"
-                placeholderTextColor="#7B88A4"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="next"
-              />
-            </View>
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      errors.email && styles.inputError,
+                    ]}
+                  >
+                    <Feather
+                      name="mail"
+                      size={20}
+                      color="#5C6988"
+                      style={styles.inputIcon}
+                    />
+
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Email Address"
+                      placeholderTextColor="#7B88A4"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="next"
+                    />
+                  </View>
+
+                  {errors.email && (
+                    <Text style={styles.errorText}>
+                      {errors.email.message}
+                    </Text>
+                  )}
+                </>
+              )}
+            />
 
             {/* Password Input */}
-            <View style={styles.inputContainer}>
-              <Feather
-                name="lock"
-                size={20}
-                color="#5C6988"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#7B88A4"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                returnKeyType="next"
-              />
-              <Pressable
-                onPress={() => setShowPassword((prev) => !prev)}
-                hitSlop={10}
-                style={styles.eyeIconWrapper}
-                accessibilityRole="button"
-                accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-              >
-                <Feather
-                  name={showPassword ? "eye" : "eye-off"}
-                  size={20}
-                  color="#5C6988"
-                />
-              </Pressable>
-            </View>
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      errors.password && styles.inputError,
+                    ]}
+                  >
+                    <Feather
+                      name="lock"
+                      size={20}
+                      color="#5C6988"
+                      style={styles.inputIcon}
+                    />
+
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Password"
+                      placeholderTextColor="#7B88A4"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      returnKeyType="next"
+                    />
+
+                    <Pressable
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      hitSlop={10}
+                      style={styles.eyeIconWrapper}
+                      accessibilityRole="button"
+                      accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+                    >
+                      <Feather
+                        name={showPassword ? "eye" : "eye-off"}
+                        size={20}
+                        color="#5C6988"
+                      />
+                    </Pressable>
+                  </View>
+
+                  {errors.password && (
+                    <Text style={styles.errorText}>
+                      {errors.password.message}
+                    </Text>
+                  )}
+                </>
+              )}
+            />
 
             {/* Confirm Password Input */}
-            <View style={styles.inputContainer}>
-              <Feather
-                name="lock"
-                size={20}
-                color="#5C6988"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Confirm Password"
-                placeholderTextColor="#7B88A4"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirmPassword}
-                autoCapitalize="none"
-                returnKeyType="done"
-                onSubmitEditing={handleRegister}
-              />
-              <Pressable
-                onPress={() => setShowConfirmPassword((prev) => !prev)}
-                hitSlop={10}
-                style={styles.eyeIconWrapper}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  showConfirmPassword ? "Hide confirm password" : "Show confirm password"
-                }
-              >
-                <Feather
-                  name={showConfirmPassword ? "eye" : "eye-off"}
-                  size={20}
-                  color="#5C6988"
-                />
-              </Pressable>
-            </View>
+            <Controller
+              control={control}
+              name="confirmPassword"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <>
+                  <View
+                   style={[
+                     styles.inputContainer,
+                     errors.confirmPassword && styles.inputError,
+                    ]}
+                  >
+                    <Feather
+                      name="lock"
+                      size={20}
+                      color="#5C6988"
+                      style={styles.inputIcon}
+                    />
+
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Confirm Password"
+                      placeholderTextColor="#7B88A4"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      secureTextEntry={!showConfirmPassword}
+                      autoCapitalize="none"
+                      returnKeyType="done"
+                    />
+
+                    <Pressable
+                      onPress={() => setShowConfirmPassword((prev) => !prev)}
+                      hitSlop={10}
+                      style={styles.eyeIconWrapper}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        showConfirmPassword
+                          ? "Hide confirm password"
+                          : "Show confirm password"
+                      }
+                    >
+                      <Feather
+                        name={showConfirmPassword ? "eye" : "eye-off"}
+                        size={20}
+                        color="#5C6988"
+                      />
+                    </Pressable>
+                  </View>
+
+                  {errors.confirmPassword && (
+                    <Text style={styles.errorText}>
+                      {errors.confirmPassword.message}
+                    </Text>
+                  )}
+                </>
+              )}
+            />
 
             {/* Submit Button: Create an Account */}
             <Pressable
@@ -179,7 +329,7 @@ export default function RegisterScreen() {
                 styles.primaryButton,
                 pressed && styles.primaryButtonPressed,
               ]}
-              onPress={handleRegister}
+              onPress={handleSubmit(handleRegister)}
               accessibilityRole="button"
               accessibilityLabel="Create an Account"
             >
@@ -280,6 +430,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 14,
   },
+  inputError: {
+  borderWidth: 1,
+  borderColor: "#EF4444",
+},
   inputIcon: {
     marginRight: 12,
   },
@@ -360,5 +514,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#0C4EF6",
     textAlign: "center",
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 10,
+    marginLeft: 4,
   },
 });

@@ -3,6 +3,9 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
+import * as yup from "yup";
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -18,15 +21,51 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+type LoginFormData = {
+  email: string;
+  password: string;
+};
+
+const loginSchema = yup.object({
+  email: yup
+    .string()
+    .trim()
+    .email("Enter a valid email address")
+    .required("Email address is required"),
+
+  password: yup
+    .string()
+    .required("Password is required"),
+});
+
 export default function LoginScreen() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const {
+  control,
+  handleSubmit,
+  formState: { errors },
+} = useForm<LoginFormData>({
+  resolver: yupResolver(loginSchema),
+  mode: "onTouched",
+  reValidateMode: "onChange",
+  defaultValues: {
+    email: "",
+    password: "",
+  },
+});
+
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = () => {
-    // Frontend navigation placeholder ready for backend integration
-    router.push("/users");
+const handleLogin = (data: LoginFormData) => {
+  const cleanedData = {
+    email: data.email.trim().toLowerCase(),
+    password: data.password,
   };
+
+  console.log("Login form data:", cleanedData);
+
+  // Temporary navigation until backend integration
+  router.push("/users");
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -58,78 +97,123 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          {/* Form Fields Section */}
-          <View style={styles.formSection}>
-            {/* Email Address Input */}
-            <View style={styles.inputContainer}>
-              <Feather
-                name="mail"
-                size={20}
-                color="#5C6988"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Email Address"
-                placeholderTextColor="#7B88A4"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="next"
-              />
-            </View>
+{/* Form Fields Section */}
+<View style={styles.formSection}>
+{/* Email Address Input */}
+<Controller
+  control={control}
+  name="email"
+  render={({ field: { onChange, onBlur, value } }) => (
+    <>
+      <View
+        style={[
+          styles.inputContainer,
+          errors.email && styles.inputError,
+        ]}
+      >
+        <Feather
+          name="mail"
+          size={20}
+          color="#5C6988"
+          style={styles.inputIcon}
+        />
 
-            {/* Password Input */}
-            <View style={styles.inputContainer}>
-              <Feather
-                name="lock"
-                size={20}
-                color="#5C6988"
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Password"
-                placeholderTextColor="#7B88A4"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-              />
-              <Pressable
-                onPress={() => setShowPassword((prev) => !prev)}
-                hitSlop={10}
-                style={styles.eyeIconWrapper}
-                accessibilityRole="button"
-                accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-              >
-                <Feather
-                  name={showPassword ? "eye" : "eye-off"}
-                  size={20}
-                  color="#5C6988"
-                />
-              </Pressable>
-            </View>
+        <TextInput
+          style={styles.input}
+          placeholder="Email Address"
+          placeholderTextColor="#7B88A4"
+          value={value}
+          onChangeText={onChange}
+          onBlur={onBlur}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="next"
+        />
+      </View>
 
-            {/* Submit Button: Login */}
-            <Pressable
-              style={({ pressed }) => [
+      {errors.email && (
+        <Text style={styles.errorText}>
+          {errors.email.message}
+        </Text>
+      )}
+    </>
+  )}
+/>
+
+{/* Password Input */}
+<Controller
+  control={control}
+  name="password"
+  render={({ field: { onChange, onBlur, value } }) => (
+    <>
+      <View
+        style={[
+          styles.inputContainer,
+          errors.password && styles.inputError,
+        ]}
+      >
+        <Feather
+          name="lock"
+          size={20}
+          color="#5C6988"
+          style={styles.inputIcon}
+        />
+
+       <TextInput
+         style={styles.input}
+         placeholder="Password"
+         placeholderTextColor="#7B88A4"
+         value={value}
+         onChangeText={onChange}
+         onBlur={onBlur}
+         secureTextEntry={!showPassword}
+         autoCapitalize="none"
+         returnKeyType="done"
+         onSubmitEditing={handleSubmit(handleLogin)}
+       />
+
+        <Pressable
+          onPress={() => setShowPassword((prev) => !prev)}
+          hitSlop={10}
+          style={styles.eyeIconWrapper}
+          accessibilityRole="button"
+          accessibilityLabel={
+            showPassword ? "Hide password" : "Show password"
+          }
+        >
+          <Feather
+            name={showPassword ? "eye" : "eye-off"}
+            size={20}
+            color="#5C6988"
+          />
+        </Pressable>
+      </View>
+
+      {errors.password && (
+        <Text style={styles.errorText}>
+          {errors.password.message}
+        </Text>
+      )}
+    </>
+  )}
+/>
+
+      {/* Submit Button: Login */}
+        <Pressable
+            style={({ pressed }) => [
                 styles.primaryButton,
                 pressed && styles.primaryButtonPressed,
               ]}
-              onPress={handleLogin}
+              onPress={handleSubmit(handleLogin)}
               accessibilityRole="button"
               accessibilityLabel="Login"
             >
-              <Text style={styles.primaryButtonText}>Login</Text>
-              <View style={styles.buttonIconWrapper}>
+            <Text style={styles.primaryButtonText}>Login</Text>
+            <View style={styles.buttonIconWrapper}>
                 <Feather name="arrow-right" size={20} color="#FFFFFF" />
-              </View>
-            </Pressable>
+            </View>
+        </Pressable>
 
             {/* Don't have an account? Register */}
             <View style={styles.registerRow}>
@@ -305,4 +389,15 @@ const styles = StyleSheet.create({
     color: "#0C4EF6",
     textAlign: "center",
   },
+  inputError: {
+  borderWidth: 1,
+  borderColor: "#EF4444",
+ },
+ errorText: {
+  color: "#EF4444",
+  fontSize: 12,
+  marginTop: -8,
+  marginBottom: 10,
+  marginLeft: 4,
+},
 });

@@ -1,11 +1,12 @@
 import Feather from "@expo/vector-icons/Feather";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import * as yup from "yup";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
+
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -18,6 +19,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "@/hooks/useAuth";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -39,6 +41,8 @@ const loginSchema = yup.object({
 });
 
 export default function LoginScreen() {
+  const { login, isAuthenticated } = useAuth();
+
   const {
   control,
   handleSubmit,
@@ -55,6 +59,10 @@ export default function LoginScreen() {
 
   const [showPassword, setShowPassword] = useState(false);
 
+  if (isAuthenticated) {
+  return <Redirect href="/users" />;
+}
+
 const handleLogin = (data: LoginFormData) => {
   const cleanedData = {
     email: data.email.trim().toLowerCase(),
@@ -63,7 +71,14 @@ const handleLogin = (data: LoginFormData) => {
 
   console.log("Login form data:", cleanedData);
 
-  // Temporary navigation until backend integration
+  const userData = {
+    id: 1,
+    name: "Demo User",
+    email: cleanedData.email,
+  };
+
+  login(userData);
+
   router.push("/users");
 };
 

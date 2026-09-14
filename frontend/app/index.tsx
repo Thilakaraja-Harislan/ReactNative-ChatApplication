@@ -1,14 +1,21 @@
 import Feather from "@expo/vector-icons/Feather";
 import { Image } from "expo-image";
-import { router } from "expo-router";
+import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "@/hooks/useAuth";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export default function Index() {
+  const { isAuthenticated } = useAuth();
+
+if (isAuthenticated) {
+  return <Redirect href="/users" />;
+}
+
   return (
      <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark"/>

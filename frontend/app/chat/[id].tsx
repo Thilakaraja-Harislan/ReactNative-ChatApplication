@@ -4,6 +4,8 @@ import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useRef, useState } from "react";
+import { Redirect } from "expo-router";
+import { useAuth } from "@/hooks/useAuth";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -126,6 +128,12 @@ const INITIAL_MESSAGES: ChatMessage[] = [
 ];
 
 export default function ChatScreen() {
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
+
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const flatListRef = useRef<FlatList>(null);

@@ -4,6 +4,8 @@ import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useMemo, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { Redirect } from "expo-router";
 import {
   FlatList,
   Pressable,
@@ -100,6 +102,15 @@ const CATEGORIES = ["All", "Favorites", "Friends", "Work"] as const;
 type CategoryType = (typeof CATEGORIES)[number];
 
 export default function UsersScreen() {
+  const { user, isAuthenticated, logout } = useAuth();
+
+  if (!isAuthenticated) {
+  return <Redirect href="/login" />;
+}
+
+  console.log("Logged in user:", user);
+  console.log("Authenticated:", isAuthenticated);
+
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>("All");
@@ -126,6 +137,10 @@ export default function UsersScreen() {
       params: { id: user.id },
     });
   };
+
+  const handleLogout = () => {
+  logout();
+};
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>

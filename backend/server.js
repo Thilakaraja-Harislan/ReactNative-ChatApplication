@@ -2,15 +2,29 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const pool = require("./config/db");
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
+const authenticateToken = require("./middleware/authMiddleware");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
+app.use("/api/auth", authRoutes);
+
 app.get("/", (req, res) => {
   res.send("ChatConnect backend is running");
 });
+
+app.get("/api/protected", authenticateToken, (req, res) => {
+  res.status(200).json({
+    message: "Protected route accessed successfully",
+    user: req.user,
+  });
+});
+
+app.use("/api/users", userRoutes);
 
 const PORT = process.env.PORT || 5000;
 

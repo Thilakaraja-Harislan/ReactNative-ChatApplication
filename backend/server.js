@@ -5,6 +5,7 @@ const pool = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const authenticateToken = require("./middleware/authMiddleware");
+const messageRoutes = require("./routes/messageRoutes");
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.get("/api/protected", authenticateToken, (req, res) => {
 });
 
 app.use("/api/users", userRoutes);
+app.use("/api/messages", messageRoutes);
 
 const PORT = process.env.PORT || 5000;
 

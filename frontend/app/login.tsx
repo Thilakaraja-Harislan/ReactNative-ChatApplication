@@ -6,6 +6,7 @@ import React, { useState } from "react";
 import * as yup from "yup";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
+import API_BASE_URL from "@/services/api";
 
 import {
   Dimensions,
@@ -63,23 +64,37 @@ export default function LoginScreen() {
   return <Redirect href="/users" />;
 }
 
-const handleLogin = (data: LoginFormData) => {
-  const cleanedData = {
-    email: data.email.trim().toLowerCase(),
-    password: data.password,
-  };
+const handleLogin = async (data: LoginFormData) => {
+  try {
+    const cleanedData = {
+      email: data.email.trim().toLowerCase(),
+      password: data.password,
+    };
 
-  console.log("Login form data:", cleanedData);
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(cleanedData),
+    });
 
-  const userData = {
-    id: 1,
-    name: "Demo User",
-    email: cleanedData.email,
-  };
+    const result = await response.json();
 
-  login(userData);
+    if (!response.ok) {
+      console.log("Login failed:", result.message);
+      return;
+    }
 
-  router.push("/users");
+    console.log("Login successful:", result);
+
+    // We will improve AuthContext to store the JWT in the next step.
+    login(result.user, result.token);
+
+    router.replace("/users");
+  } catch (error) {
+    console.error("Login request error:", error);
+  }
 };
 
   return (

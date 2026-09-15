@@ -3,8 +3,9 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import API_BASE_URL from "@/services/api";
 import { Redirect } from "expo-router";
 import {
   FlatList,
@@ -16,6 +17,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
+type ChatUser = {
+  id: number;
+  name: string;
+  email: string;
+  created_at: string;
+};
 
 interface UserConversation {
   id: string;
@@ -102,11 +110,7 @@ const CATEGORIES = ["All", "Favorites", "Friends", "Work"] as const;
 type CategoryType = (typeof CATEGORIES)[number];
 
 export default function UsersScreen() {
-  const { user, isAuthenticated, logout } = useAuth();
-
-  if (!isAuthenticated) {
-  return <Redirect href="/login" />;
-}
+  const { user, token, isAuthenticated, logout } = useAuth();
 
   console.log("Logged in user:", user);
   console.log("Authenticated:", isAuthenticated);
@@ -115,32 +119,84 @@ export default function UsersScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>("All");
   const [activeTab, setActiveTab] = useState<"users" | "calls" | "settings">("users");
+  const [registeredUsers, setRegisteredUsers] = useState<ChatUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredUsers = useMemo(() => {
-    return USERS_DATA.filter((user) => {
-      const matchesSearch =
-        user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.lastMessage.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory =
-        selectedCategory === "All" || user.category === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [searchQuery, selectedCategory]);
+const filteredUsers = useMemo(() => {
+  const query = searchQuery.trim().toLowerCase();
+
+  if (!query) {
+    return registeredUsers;
+  }
+
+  return registeredUsers.filter(
+    (user) =>
+      user.name.toLowerCase().includes(query) ||
+      user.email.toLowerCase().includes(query)
+  );
+}, [registeredUsers, searchQuery]);
 
   const onlineStories = useMemo(() => {
     return USERS_DATA.filter((user) => user.isOnline);
   }, []);
 
-  const openChat = (user: UserConversation) => {
-    router.push({
-      pathname: "/chat/[id]",
-      params: { id: user.id },
-    });
-  };
+const openChat = (user: ChatUser) => {
+  router.push({
+    pathname: "/chat/[id]",
+    params: {
+     id: user.id.toString(),
+     name: user.name,
+    },
+  });
+};
 
   const handleLogout = () => {
   logout();
 };
+
+useEffect(() => {
+  const fetchUsers = async () => {
+    if (!token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/users`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.log("Failed to fetch users:", result.message);
+        return;
+      }
+
+      setRegisteredUsers(result.users);
+    } catch (error) {
+      console.error("Fetch users error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  fetchUsers();
+}, [token]);
+
+useEffect(() => {
+  console.log("Registered users:", registeredUsers);
+}, [registeredUsers]);
+
+if (isLoading) {
+  return null;
+}
+
+if (!isAuthenticated) {
+  return <Redirect href="/login" />;
+}
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
@@ -187,142 +243,44 @@ export default function UsersScreen() {
         </View>
 
         {/* Scrollable Body: Online Row + Filter Tabs + Conversations */}
-        <FlatList
-          data={filteredUsers}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          ListHeaderComponent={
-            <View>
-              {/* Online Section */}
-              <View style={styles.onlineHeader}>
-                <Text style={styles.onlineTitle}>Online</Text>
-                <Pressable
-                  onPress={() => {
-                    // See all online contacts
-                  }}
-                  hitSlop={8}
-                >
-                  <Text style={styles.seeAllText}>See all</Text>
-                </Pressable>
-              </View>
+<FlatList
+  data={filteredUsers}
+  keyExtractor={(item) => item.id.toString()}
+  showsVerticalScrollIndicator={false}
+  contentContainerStyle={styles.listContent}
+  renderItem={({ item }) => (
+    <Pressable
+      style={({ pressed }) => [
+        styles.userCard,
+        pressed && styles.userCardPressed,
+      ]}
+      onPress={() => openChat(item)}
+    >
+      <View style={styles.avatarWrapper}>
+        <View style={styles.avatarCircle}>
+          <Feather
+            name="user"
+            size={26}
+            color="#0C4EF6"
+          />
+        </View>
+      </View>
 
-              {/* Online Stories Row */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.storiesContainer}
-              >
-                {/* Add Story Button */}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.storyItem,
-                    pressed && styles.storyItemPressed,
-                  ]}
-                  onPress={() => {
-                    // Add story or new user
-                  }}
-                >
-                  <View style={styles.addStoryButton}>
-                    <Feather name="user-plus" size={22} color="#0C4EF6" />
-                  </View>
-                  <Text style={styles.storyName}>Add</Text>
-                </Pressable>
+      <View style={styles.userInfoCol}>
+        <Text style={styles.userName}>
+          {item.name}
+        </Text>
 
-                {/* Online Contacts */}
-                {onlineStories.map((user) => (
-                  <Pressable
-                    key={user.id}
-                    style={({ pressed }) => [
-                      styles.storyItem,
-                      pressed && styles.storyItemPressed,
-                    ]}
-                    onPress={() => openChat(user)}
-                  >
-                    <View style={styles.storyAvatarWrapper}>
-                      <View style={styles.avatarCircle}>
-                        <Image
-                          source={user.avatar}
-                          style={styles.storyAvatar}
-                          contentFit="cover"
-                        />
-                      </View>
-                      <View style={styles.onlineBadge} />
-                    </View>
-                    <Text style={styles.storyName}>{user.firstName}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-
-              {/* Category Filter Tabs */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.categoryTabsContainer}
-              >
-                {CATEGORIES.map((category) => {
-                  const isActive = selectedCategory === category;
-                  return (
-                    <Pressable
-                      key={category}
-                      style={[
-                        styles.categoryTab,
-                        isActive && styles.categoryTabActive,
-                      ]}
-                      onPress={() => setSelectedCategory(category)}
-                    >
-                      <Text
-                        style={[
-                          styles.categoryTabText,
-                          isActive && styles.categoryTabTextActive,
-                        ]}
-                      >
-                        {category}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              style={({ pressed }) => [
-                styles.userCard,
-                pressed && styles.userCardPressed,
-              ]}
-              onPress={() => openChat(item)}
-            >
-              {/* Avatar + Online Indicator */}
-              <View style={styles.avatarWrapper}>
-                <View style={styles.avatarCircle}>
-                  <Image source={item.avatar} style={styles.avatar} contentFit="cover" />
-                </View>
-                {item.isOnline && <View style={styles.onlineBadge} />}
-              </View>
-
-              {/* User Info Column */}
-              <View style={styles.userInfoCol}>
-                <Text style={styles.userName}>{item.name}</Text>
-                <Text style={styles.lastMessage} numberOfLines={1}>
-                  {item.lastMessage}
-                </Text>
-              </View>
-
-              {/* Timestamp & Unread Count Badge */}
-              <View style={styles.metaCol}>
-                <Text style={styles.timeText}>{item.time}</Text>
-                {item.unread > 0 ? (
-                  <View style={styles.unreadBadge}>
-                    <Text style={styles.unreadText}>{item.unread}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.emptyBadge} />
-                )}
-              </View>
-            </Pressable>
-          )}
-        />
+        <Text
+          style={styles.lastMessage}
+          numberOfLines={1}
+        >
+          {item.email}
+        </Text>
+      </View>
+    </Pressable>
+  )}
+/>
 
         {/* Floating Action Button (FAB) */}
         <Pressable
@@ -556,6 +514,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     aspectRatio: 1,
     backgroundColor: "#EFF4FB",
+    justifyContent: "center",
+    alignItems: "center",
   },
   storyAvatar: {
     width: "100%",

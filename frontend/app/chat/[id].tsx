@@ -3,9 +3,10 @@ import Ionicons from "@expo/vector-icons/Ionicons";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { Redirect } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
+import API_BASE_URL from "@/services/api";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -25,6 +26,14 @@ interface ChatMessage {
   time: string;
   status?: "sent" | "delivered" | "read";
 }
+
+type BackendMessage = {
+  id: number;
+  senderId: number;
+  receiverId: number;
+  message: string;
+  createdAt: string;
+};
 
 interface UserProfile {
   name: string;
@@ -128,49 +137,142 @@ const INITIAL_MESSAGES: ChatMessage[] = [
 ];
 
 export default function ChatScreen() {
-  const { isAuthenticated } = useAuth();
-
-  if (!isAuthenticated) {
-    return <Redirect href="/login" />;
-  }
+  const { user: loggedInUser, token, isAuthenticated, isLoading } = useAuth();
 
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, name } = useLocalSearchParams<{
+      id?: string;
+      name?: string;
+  }>();
   const flatListRef = useRef<FlatList>(null);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
 
-  const currentUserId = id || "1";
-  const user: UserProfile = USERS_MAP[currentUserId] || USERS_MAP["1"];
+  useEffect(() => {
+  const fetchConversation = async () => {
+    if (!token || !id) {
+      return;
+    }
 
-  const handleSendMessage = () => {
-    const trimmed = inputText.trim();
-    if (!trimmed) return;
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/messages/${id}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
-    const now = new Date();
-    const hours = now.getHours();
-    const minutes = now.getMinutes();
-    const ampm = hours >= 12 ? "PM" : "AM";
-    const formattedHours = hours % 12 || 12;
-    const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
-    const timeString = `${formattedHours}:${formattedMinutes} ${ampm}`;
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.log(
+          "Failed to fetch conversation:",
+          result.message
+        );
+        return;
+      }
+
+const convertedMessages: ChatMessage[] =
+  result.messages.map((message: BackendMessage) => {
+    const createdAt = new Date(message.createdAt);
+
+    const time = createdAt.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+
+    return {
+      id: message.id.toString(),
+
+     sender:
+        message.senderId === loggedInUser?.id
+          ? "me"
+          : "them",
+
+      text: message.message,
+
+      time,
+    };
+  });
+
+setMessages(convertedMessages);
+
+console.log(
+  "Converted conversation messages:",
+  convertedMessages
+);
+
+    } catch (error) {
+      console.error(
+        "Fetch conversation error:",
+        error
+      );
+    }
+  };
+
+  fetchConversation();
+}, [id, token, loggedInUser?.id]);
+
+if (!isAuthenticated) {
+  return <Redirect href="/login" />;
+}
+
+const handleSendMessage = async () => {
+  const trimmed = inputText.trim();
+
+  if (!trimmed || !token || !id) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        receiverId: Number(id),
+        message: trimmed,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.log("Failed to send message:", result.message);
+      return;
+    }
+
+    console.log("Message sent successfully:", result);
 
     const newMessage: ChatMessage = {
-      id: `msg_${Date.now()}`,
+      id: result.data.id.toString(),
       sender: "me",
-      text: trimmed,
-      time: timeString,
-      status: "read",
+      text: result.data.message,
+      time: new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
     };
 
     setMessages((prev) => [...prev, newMessage]);
+
     setInputText("");
 
     setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
+      flatListRef.current?.scrollToEnd({
+        animated: true,
+      });
     }, 100);
-  };
+  } catch (error) {
+    console.error("Send message error:", error);
+  }
+};
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
@@ -193,19 +295,30 @@ export default function ChatScreen() {
           </Pressable>
 
           {/* Contact Avatar with Online Indicator */}
-          <View style={styles.avatarWrapper}>
-            <View style={styles.avatarCircle}>
-              <Image source={user.avatar} style={styles.avatarImage} contentFit="cover" />
-            </View>
-            {user.isOnline && <View style={styles.onlineBadge} />}
-          </View>
+        <View style={styles.avatarWrapper}>
+           <View
+              style={[
+                 styles.avatarCircle,
+                 {
+                   justifyContent: "center",
+                   alignItems: "center",
+                 },
+              ]}
+        >
+           <Feather
+              name="user"
+              size={24}
+              color="#0C4EF6"
+            />
+        </View>
+      </View>
 
           {/* Name and Online Status */}
           <View style={styles.headerInfo}>
             <Text style={styles.headerName} numberOfLines={1}>
-              {user.name}
+              {name || "User"}
             </Text>
-            <Text style={styles.headerStatus}>{user.status}</Text>
+  
           </View>
         </View>
 
@@ -276,13 +389,21 @@ export default function ChatScreen() {
               return (
                 <View style={styles.incomingContainer}>
                   {/* Incoming Contact Avatar */}
-                  <View style={styles.messageAvatarCircle}>
-                    <Image
-                      source={user.avatar}
-                      style={styles.messageAvatarImage}
-                      contentFit="cover"
-                    />
-                  </View>
+                   <View
+                      style={[
+                         styles.messageAvatarCircle,
+                      {
+                         justifyContent: "center",
+                         alignItems: "center",
+                      },
+                   ]}
+                >
+                  <Feather
+                     name="user"
+                     size={20}
+                     color="#0C4EF6"
+                   />
+            </View>
 
                   {/* Message Bubble + Timestamp */}
                   <View style={styles.incomingBubbleWrapper}>

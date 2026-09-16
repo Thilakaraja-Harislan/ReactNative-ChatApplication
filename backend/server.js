@@ -1,3 +1,5 @@
+const http = require("http");
+const { Server } = require("socket.io");
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -8,6 +10,15 @@ const authenticateToken = require("./middleware/authMiddleware");
 const messageRoutes = require("./routes/messageRoutes");
 
 const app = express();
+
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
 
 app.use(cors());
 app.use(express.json());
@@ -26,11 +37,27 @@ app.get("/api/protected", authenticateToken, (req, res) => {
 });
 
 app.use("/api/users", userRoutes);
-app.use("/api/messages", messageRoutes);
+app.use("/api/messages", messageRoutes(io));
+
+io.on("connection", (socket) => {
+  console.log("Socket connected:", socket.id);
+
+  socket.on("register-user", (userId) => {
+    socket.join(`user:${userId}`);
+
+    console.log(
+      `User ${userId} registered with socket ${socket.id}`
+    );
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Socket disconnected:", socket.id);
+  });
+});
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, async () => {
+server.listen(PORT, async () => {
   try {
     const connection = await pool.getConnection();
 

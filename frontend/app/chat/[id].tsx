@@ -7,6 +7,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { Redirect } from "expo-router";
 import { useAuth } from "@/hooks/useAuth";
 import API_BASE_URL from "@/services/api";
+import socket from "@/services/socket";
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -216,6 +217,53 @@ console.log(
 
   fetchConversation();
 }, [id, token, loggedInUser?.id]);
+
+useEffect(() => {
+  if (!loggedInUser) {
+    return;
+  }
+
+  socket.connect();
+
+  const handleConnect = () => {
+    console.log("Socket connected:", socket.id);
+
+    socket.emit("register-user", loggedInUser.id);
+  };
+
+  const handleNewMessage = (message: BackendMessage) => {
+  console.log("New real-time message received:", message);
+
+  const newMessage: ChatMessage = {
+    id: message.id.toString(),
+    sender: message.senderId === loggedInUser?.id ? "me" : "them",
+    text: message.message,
+    time: new Date().toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    }),
+  };
+
+  setMessages((prev) => [...prev, newMessage]);
+
+  setTimeout(() => {
+    flatListRef.current?.scrollToEnd({ animated: true });
+  }, 100);
+};
+
+  socket.on("connect", handleConnect);
+  socket.on("new-message", handleNewMessage);
+
+  // The socket might already be connected
+  if (socket.connected) {
+    handleConnect();
+  }
+
+  return () => {
+    socket.off("connect", handleConnect);
+    socket.off("new-message", handleNewMessage);
+  };
+}, [loggedInUser?.id]);
 
 if (!isAuthenticated) {
   return <Redirect href="/login" />;

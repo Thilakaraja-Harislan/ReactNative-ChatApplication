@@ -4,6 +4,8 @@ const authenticateToken = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
+module.exports = (io) => {
+
 router.post("/", authenticateToken, async (req, res) => {
   try {
     const senderId = req.user.id;
@@ -42,15 +44,22 @@ router.post("/", authenticateToken, async (req, res) => {
       [senderId, receiverId, cleanedMessage]
     );
 
-    return res.status(201).json({
-      message: "Message sent successfully",
-      data: {
-        id: result.insertId,
-        senderId,
-        receiverId: Number(receiverId),
-        message: cleanedMessage,
-      },
-    });
+    const savedMessage = {
+      id: result.insertId,
+      senderId,
+      receiverId: Number(receiverId),
+      message: cleanedMessage,
+    };
+
+    io.to(`user:${receiverId}`).emit("new-message", savedMessage);
+
+    console.log(`Real-time message emitted to user ${receiverId}`
+   );
+
+     return res.status(201).json({
+       message: "Message sent successfully",
+       data: savedMessage,
+     });
   } catch (error) {
     console.error("Send message error:", error);
 
@@ -123,4 +132,5 @@ router.get("/:userId", authenticateToken, async (req, res) => {
   }
 });
 
-module.exports = router;
+return router;
+};

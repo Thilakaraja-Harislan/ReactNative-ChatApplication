@@ -170,9 +170,12 @@ useEffect(() => {
 
       const result = await response.json();
 
-      if (!response.ok) {
-        console.log("Failed to fetch users:", result.message);
-        return;
+     if (response.status === 401) {
+        console.log("Session expired. Logging out.");
+
+       await logout();
+       router.replace("/login");
+       return;
       }
 
       setRegisteredUsers(result.users);
@@ -184,7 +187,7 @@ useEffect(() => {
   };
 
   fetchUsers();
-}, [token]);
+}, [token, logout]);
 
 useEffect(() => {
   console.log("Registered users:", registeredUsers);
@@ -226,6 +229,18 @@ if (!isAuthenticated) {
           >
             <Feather name="user" size={26} color="#0B1220" />
           </Pressable>
+
+          <Pressable
+             onPress={handleLogout}
+             style={({ pressed }) => [
+             styles.logoutButton,
+             pressed && { opacity: 0.6 },
+          ]}
+            accessibilityRole="button"
+            accessibilityLabel="Logout"
+          >
+         <Feather name="log-out" size={22} color="#0B1220" />
+        </Pressable>
         </View>
 
         {/* Search Bar */}
@@ -679,4 +694,9 @@ const styles = StyleSheet.create({
     color: "#0C4EF6",
     fontWeight: "600",
   },
+  logoutButton: {
+  padding: 8,
+  justifyContent: "center",
+  alignItems: "center",
+},
 });

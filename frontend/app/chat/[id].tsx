@@ -286,7 +286,7 @@ const handleSendMessage = async () => {
               styles.backButton,
               pressed && styles.iconPressed,
             ]}
-            onPress={() => router.back()}
+            onPress={() => router.replace("/users")}
             accessibilityRole="button"
             accessibilityLabel="Go back"
             hitSlop={8}

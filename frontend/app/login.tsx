@@ -59,6 +59,7 @@ export default function LoginScreen() {
 });
 
   const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
   if (isAuthenticated) {
   return <Redirect href="/users" />;
@@ -66,6 +67,7 @@ export default function LoginScreen() {
 
 const handleLogin = async (data: LoginFormData) => {
   try {
+    setLoginError("");
     const cleanedData = {
       email: data.email.trim().toLowerCase(),
       password: data.password,
@@ -82,7 +84,7 @@ const handleLogin = async (data: LoginFormData) => {
     const result = await response.json();
 
     if (!response.ok) {
-      console.log("Login failed:", result.message);
+      setLoginError(result.message || "Invalid email or password");
       return;
     }
 
@@ -228,6 +230,12 @@ const handleLogin = async (data: LoginFormData) => {
     </>
   )}
 />
+
+{loginError ? (
+  <Text style={styles.loginErrorText}>
+    {loginError}
+  </Text>
+) : null}
 
       {/* Submit Button: Login */}
         <Pressable
@@ -429,5 +437,11 @@ const styles = StyleSheet.create({
   marginTop: -8,
   marginBottom: 10,
   marginLeft: 4,
+},
+loginErrorText: {
+  color: "#DC2626",
+  fontSize: 13,
+  marginTop: 8,
+  marginBottom: 8,
 },
 });

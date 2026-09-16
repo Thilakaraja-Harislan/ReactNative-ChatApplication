@@ -6,6 +6,7 @@ import React, { useState } from "react";
 import * as yup from "yup";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
+import API_BASE_URL from "@/services/api";
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -81,18 +82,49 @@ export default function RegisterScreen() {
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [registerError, setRegisterError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-const handleRegister = (data: RegisterFormData) => {
+const handleRegister = async (data: RegisterFormData) => {
   const cleanedData = {
     name: data.name.trim(),
     email: data.email.trim().toLowerCase(),
     password: data.password,
   };
 
-  console.log("Register form data:", cleanedData);
+  try {
+    setRegisterError("");
+    setIsSubmitting(true);
 
-  // Temporary navigation until backend integration
-  router.push("/users");
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(cleanedData),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      setRegisterError(
+        result.message || "Registration failed. Please try again."
+      );
+      return;
+    }
+
+    console.log("Registration successful:", result);
+
+    router.replace("/login");
+  } catch (error) {
+    console.error("Registration error:", error);
+
+    setRegisterError(
+      "Unable to connect to the server. Please try again."
+    );
+  } finally {
+    setIsSubmitting(false);
+  }
 };
 
   return (
@@ -323,20 +355,33 @@ const handleRegister = (data: RegisterFormData) => {
               )}
             />
 
-            {/* Submit Button: Create an Account */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryButton,
-                pressed && styles.primaryButtonPressed,
+            {registerError ? (
+              <Text style={styles.registerErrorText}>
+                 {registerError}
+              </Text>
+            ) : null}
+
+           {/* Submit Button: Create an Account */}
+           <Pressable
+               style={({ pressed }) => [
+               styles.primaryButton,
+               pressed && styles.primaryButtonPressed,
+               isSubmitting && { opacity: 0.6 },
               ]}
-              onPress={handleSubmit(handleRegister)}
-              accessibilityRole="button"
-              accessibilityLabel="Create an Account"
+             onPress={handleSubmit(handleRegister)}
+             disabled={isSubmitting}
+             accessibilityRole="button"
+             accessibilityLabel="Create an Account"
             >
-              <Text style={styles.primaryButtonText}>Create an Account</Text>
-              <View style={styles.buttonIconWrapper}>
-                <Feather name="arrow-right" size={20} color="#FFFFFF" />
-              </View>
+            <Text style={styles.primaryButtonText}>
+                {isSubmitting ? "Creating Account..." : "Create an Account"}
+            </Text>
+
+             {!isSubmitting && (
+            <View style={styles.buttonIconWrapper}>
+            <Feather name="arrow-right" size={20} color="#FFFFFF" />
+            </View>
+             )}
             </Pressable>
 
             {/* Already have an account? Login */}
@@ -522,4 +567,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginLeft: 4,
   },
+  registerErrorText: {
+  color: "#EF4444",
+  fontSize: 13,
+  textAlign: "center",
+  marginBottom: 8,
+},
 });

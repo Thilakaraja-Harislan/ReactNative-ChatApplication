@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const SOCKET_URL = "http://172.19.52.90:5000";
+const SOCKET_URL = process.env.EXPO_PUBLIC_API_URL;
 
 const socket = io(SOCKET_URL, {
   autoConnect: false,

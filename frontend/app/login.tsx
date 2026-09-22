@@ -2,12 +2,7 @@ import API_BASE_URL from "@/services/api";
 import { renderGoogleButton } from "@/services/googleAuth.web";
 import Feather from "@expo/vector-icons/Feather";
 import { yupResolver } from "@hookform/resolvers/yup";
-import {
-  GoogleSignin,
-  isErrorWithCode,
-  isSuccessResponse,
-  statusCodes,
-} from "@react-native-google-signin/google-signin";
+
 import { Image } from "expo-image";
 import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -52,12 +47,7 @@ if (!GOOGLE_WEB_CLIENT_ID) {
   console.warn("EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not configured");
 }
 
-if (Platform.OS !== "web") {
-  GoogleSignin.configure({
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    offlineAccess: false,
-  });
-}
+
 
 export default function LoginScreen() {
   const { login, isAuthenticated } = useAuth();
@@ -116,87 +106,10 @@ export default function LoginScreen() {
     }
   };
 
- const handleGoogleLogin = async () => {
-  try {
-    setLoginError("");
-    setGoogleLoading(true);
-
-    await GoogleSignin.hasPlayServices({
-      showPlayServicesUpdateDialog: true,
-    });
-
-    const response = await GoogleSignin.signIn();
-
-    if (!isSuccessResponse(response)) {
-      return;
-    }
-
-    const idToken = response.data.idToken;
-
-    if (!idToken) {
-      setLoginError(
-        "Google did not return an ID token. Check the Web Client ID."
-      );
-      return;
-    }
-
-    const apiResponse = await fetch(
-      `${API_BASE_URL}/auth/google`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken }),
-      }
-    );
-
-    const result = await apiResponse.json();
-
-    if (!apiResponse.ok) {
-      setLoginError(
-        result.message || "Google authentication failed"
-      );
-      return;
-    }
-
-    await login(result.user, result.token);
-    router.replace("/users");
-  } catch (error: unknown) {
-    console.error("Google Sign-In error:", error);
-
-    if (isErrorWithCode(error)) {
-      switch (error.code) {
-        case statusCodes.IN_PROGRESS:
-          setLoginError(
-            "Google Sign-In is already in progress."
-          );
-          return;
-
-        case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
-          setLoginError(
-            Platform.OS === "android"
-              ? "Google Play Services is unavailable or needs updating."
-              : "Google Sign-In is currently unavailable."
-          );
-          return;
-
-        default:
-          setLoginError(
-            error.message || "Google Sign-In failed."
-          );
-          return;
-      }
-    }
-
-    setLoginError(
-      error instanceof Error
-        ? error.message
-        : "Unable to sign in with Google."
-    );
-  } finally {
-    setGoogleLoading(false);
-  }
+const handleGoogleLogin = async () => {
+  setLoginError(
+    "Google Sign-In requires a development build. Please use email and password in Expo Go."
+  );
 };
 
 const handleGoogleWebLogin = async (idToken: string) => {

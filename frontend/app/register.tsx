@@ -2,11 +2,13 @@ import Feather from "@expo/vector-icons/Feather";
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as yup from "yup";
 import { Controller, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import API_BASE_URL from "@/services/api";
+import { useAuth } from "@/hooks/useAuth";
+import { renderGoogleButton } from "@/services/googleAuth.web";
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -85,6 +87,10 @@ export default function RegisterScreen() {
   const [registerError, setRegisterError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { login } = useAuth();
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
 const handleRegister = async (data: RegisterFormData) => {
   const cleanedData = {
     name: data.name.trim(),
@@ -126,6 +132,56 @@ const handleRegister = async (data: RegisterFormData) => {
     setIsSubmitting(false);
   }
 };
+
+const handleGoogleRegister = async (idToken: string) => {
+  try {
+    setRegisterError("");
+    setGoogleLoading(true);
+
+    const response = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ idToken }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      setRegisterError(
+        result.message || "Google registration failed. Please try again."
+      );
+      return;
+    }
+
+    await login(result.user, result.token);
+
+    router.replace("/users");
+  } catch (error) {
+    console.error("Google registration error:", error);
+
+    setRegisterError(
+      "Unable to register with Google. Please try again."
+    );
+  } finally {
+    setGoogleLoading(false);
+  }
+};
+
+useEffect(() => {
+  if (Platform.OS !== "web" || !googleButtonRef.current) {
+    return;
+  }
+
+  renderGoogleButton(
+    googleButtonRef.current,
+    handleGoogleRegister
+  ).catch((error) => {
+    console.error("Failed to render Google button:", error);
+    setRegisterError("Unable to load Google Sign-In.");
+  });
+}, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -384,6 +440,35 @@ const handleRegister = async (data: RegisterFormData) => {
              )}
             </Pressable>
 
+            {/* OR Divider */}
+<View style={styles.dividerContainer}>
+  <View style={styles.dividerLine} />
+
+  <Text style={styles.dividerText}>OR</Text>
+
+  <View style={styles.dividerLine} />
+</View>
+
+{/* Google Registration */}
+{Platform.OS === "web" && (
+  <View
+    style={{
+      width: "100%",
+      alignItems: "center",
+      marginBottom: 20,
+      opacity: googleLoading ? 0.6 : 1,
+    }}
+  >
+    <div
+      ref={googleButtonRef}
+      style={{
+        width: "300px",
+        height: "44px",
+      }}
+    />
+  </View>
+)}
+
             {/* Already have an account? Login */}
             <View style={styles.loginRow}>
               <Text style={styles.alreadyText}>Already have an account? </Text>
@@ -572,5 +657,23 @@ const styles = StyleSheet.create({
   fontSize: 13,
   textAlign: "center",
   marginBottom: 8,
+},
+dividerContainer: {
+  flexDirection: "row",
+  alignItems: "center",
+  marginBottom: 20,
+},
+
+dividerLine: {
+  flex: 1,
+  height: 1,
+  backgroundColor: "#D9E0EA",
+},
+
+dividerText: {
+  marginHorizontal: 14,
+  fontSize: 13,
+  color: "#7B88A4",
+  fontWeight: "500",
 },
 });

@@ -1,13 +1,21 @@
+import API_BASE_URL from "@/services/api";
+import { renderGoogleButton } from "@/services/googleAuth.web";
 import Feather from "@expo/vector-icons/Feather";
+import { yupResolver } from "@hookform/resolvers/yup";
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { Image } from "expo-image";
 import { Redirect, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
-import * as yup from "yup";
+import React, { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { yupResolver } from "@hookform/resolvers/yup";
-import API_BASE_URL from "@/services/api";
+import * as yup from "yup";
 
+import { useAuth } from "@/hooks/useAuth";
 import {
   Dimensions,
   KeyboardAvoidingView,
@@ -20,7 +28,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "@/hooks/useAuth";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -36,68 +43,229 @@ const loginSchema = yup.object({
     .email("Enter a valid email address")
     .required("Email address is required"),
 
-  password: yup
-    .string()
-    .required("Password is required"),
+  password: yup.string().required("Password is required"),
 });
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+
+if (!GOOGLE_WEB_CLIENT_ID) {
+  console.warn("EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is not configured");
+}
+
+if (Platform.OS !== "web") {
+  GoogleSignin.configure({
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    offlineAccess: false,
+  });
+}
 
 export default function LoginScreen() {
   const { login, isAuthenticated } = useAuth();
 
   const {
-  control,
-  handleSubmit,
-  formState: { errors },
-} = useForm<LoginFormData>({
-  resolver: yupResolver(loginSchema),
-  mode: "onTouched",
-  reValidateMode: "onChange",
-  defaultValues: {
-    email: "",
-    password: "",
-  },
-});
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormData>({
+    resolver: yupResolver(loginSchema),
+    mode: "onTouched",
+    reValidateMode: "onChange",
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
-  if (isAuthenticated) {
-  return <Redirect href="/users" />;
-}
+  const handleLogin = async (data: LoginFormData) => {
+    try {
+      setLoginError("");
+      const cleanedData = {
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+      };
 
-const handleLogin = async (data: LoginFormData) => {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(cleanedData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setLoginError(result.message || "Invalid email or password");
+        return;
+      }
+
+      console.log("Login successful:", result);
+
+      // We will improve AuthContext to store the JWT in the next step.
+      await login(result.user, result.token);
+
+      router.replace("/users");
+    } catch (error) {
+      console.error("Login request error:", error);
+      setLoginError("Unable to login. Please try again.");
+    }
+  };
+
+ const handleGoogleLogin = async () => {
   try {
     setLoginError("");
-    const cleanedData = {
-      email: data.email.trim().toLowerCase(),
-      password: data.password,
-    };
+    setGoogleLoading(true);
 
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(cleanedData),
+    await GoogleSignin.hasPlayServices({
+      showPlayServicesUpdateDialog: true,
     });
 
-    const result = await response.json();
+    const response = await GoogleSignin.signIn();
 
-    if (!response.ok) {
-      setLoginError(result.message || "Invalid email or password");
+    if (!isSuccessResponse(response)) {
       return;
     }
 
-    console.log("Login successful:", result);
+    const idToken = response.data.idToken;
 
-    // We will improve AuthContext to store the JWT in the next step.
-    login(result.user, result.token);
+    if (!idToken) {
+      setLoginError(
+        "Google did not return an ID token. Check the Web Client ID."
+      );
+      return;
+    }
 
+    const apiResponse = await fetch(
+      `${API_BASE_URL}/auth/google`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+
+    const result = await apiResponse.json();
+
+    if (!apiResponse.ok) {
+      setLoginError(
+        result.message || "Google authentication failed"
+      );
+      return;
+    }
+
+    await login(result.user, result.token);
     router.replace("/users");
-  } catch (error) {
-    console.error("Login request error:", error);
+  } catch (error: unknown) {
+    console.error("Google Sign-In error:", error);
+
+    if (isErrorWithCode(error)) {
+      switch (error.code) {
+        case statusCodes.IN_PROGRESS:
+          setLoginError(
+            "Google Sign-In is already in progress."
+          );
+          return;
+
+        case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+          setLoginError(
+            Platform.OS === "android"
+              ? "Google Play Services is unavailable or needs updating."
+              : "Google Sign-In is currently unavailable."
+          );
+          return;
+
+        default:
+          setLoginError(
+            error.message || "Google Sign-In failed."
+          );
+          return;
+      }
+    }
+
+    setLoginError(
+      error instanceof Error
+        ? error.message
+        : "Unable to sign in with Google."
+    );
+  } finally {
+    setGoogleLoading(false);
   }
 };
+
+const handleGoogleWebLogin = async (idToken: string) => {
+  try {
+    setLoginError("");
+    setGoogleLoading(true);
+
+    const apiResponse = await fetch(
+      `${API_BASE_URL}/auth/google`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+
+    const result = await apiResponse.json();
+
+    if (!apiResponse.ok) {
+      setLoginError(
+        result.message || "Google authentication failed"
+      );
+      return;
+    }
+
+    await login(result.user, result.token);
+
+    router.replace("/users");
+  } catch (error: unknown) {
+    console.error("Google Web Sign-In error:", error);
+
+    setLoginError(
+      error instanceof Error
+        ? error.message
+        : "Unable to sign in with Google."
+    );
+  } finally {
+    setGoogleLoading(false);
+  }
+};
+
+useEffect(() => {
+  if (Platform.OS !== "web") {
+    return;
+  }
+
+  if (!googleButtonRef.current) {
+    return;
+  }
+
+  renderGoogleButton(
+    googleButtonRef.current,
+    handleGoogleWebLogin
+  ).catch((error) => {
+    console.error("Google button error:", error);
+
+    setLoginError(
+      error instanceof Error
+        ? error.message
+        : "Unable to load Google Sign-In."
+    );
+  });
+}, []);
+
+  if (isAuthenticated) {
+    return <Redirect href="/users" />;
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -129,117 +297,113 @@ const handleLogin = async (data: LoginFormData) => {
             </Text>
           </View>
 
-{/* Form Fields Section */}
-<View style={styles.formSection}>
-{/* Email Address Input */}
-<Controller
-  control={control}
-  name="email"
-  render={({ field: { onChange, onBlur, value } }) => (
-    <>
-      <View
-        style={[
-          styles.inputContainer,
-          errors.email && styles.inputError,
-        ]}
-      >
-        <Feather
-          name="mail"
-          size={20}
-          color="#5C6988"
-          style={styles.inputIcon}
-        />
+          {/* Form Fields Section */}
+          <View style={styles.formSection}>
+            {/* Email Address Input */}
+            <Controller
+              control={control}
+              name="email"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      errors.email && styles.inputError,
+                    ]}
+                  >
+                    <Feather
+                      name="mail"
+                      size={20}
+                      color="#5C6988"
+                      style={styles.inputIcon}
+                    />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email Address"
-          placeholderTextColor="#7B88A4"
-          value={value}
-          onChangeText={onChange}
-          onBlur={onBlur}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="next"
-        />
-      </View>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Email Address"
+                      placeholderTextColor="#7B88A4"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      returnKeyType="next"
+                    />
+                  </View>
 
-      {errors.email && (
-        <Text style={styles.errorText}>
-          {errors.email.message}
-        </Text>
-      )}
-    </>
-  )}
-/>
+                  {errors.email && (
+                    <Text style={styles.errorText}>{errors.email.message}</Text>
+                  )}
+                </>
+              )}
+            />
 
-{/* Password Input */}
-<Controller
-  control={control}
-  name="password"
-  render={({ field: { onChange, onBlur, value } }) => (
-    <>
-      <View
-        style={[
-          styles.inputContainer,
-          errors.password && styles.inputError,
-        ]}
-      >
-        <Feather
-          name="lock"
-          size={20}
-          color="#5C6988"
-          style={styles.inputIcon}
-        />
+            {/* Password Input */}
+            <Controller
+              control={control}
+              name="password"
+              render={({ field: { onChange, onBlur, value } }) => (
+                <>
+                  <View
+                    style={[
+                      styles.inputContainer,
+                      errors.password && styles.inputError,
+                    ]}
+                  >
+                    <Feather
+                      name="lock"
+                      size={20}
+                      color="#5C6988"
+                      style={styles.inputIcon}
+                    />
 
-       <TextInput
-         style={styles.input}
-         placeholder="Password"
-         placeholderTextColor="#7B88A4"
-         value={value}
-         onChangeText={onChange}
-         onBlur={onBlur}
-         secureTextEntry={!showPassword}
-         autoCapitalize="none"
-         returnKeyType="done"
-         onSubmitEditing={handleSubmit(handleLogin)}
-       />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Password"
+                      placeholderTextColor="#7B88A4"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      returnKeyType="done"
+                      onSubmitEditing={handleSubmit(handleLogin)}
+                    />
 
-        <Pressable
-          onPress={() => setShowPassword((prev) => !prev)}
-          hitSlop={10}
-          style={styles.eyeIconWrapper}
-          accessibilityRole="button"
-          accessibilityLabel={
-            showPassword ? "Hide password" : "Show password"
-          }
-        >
-          <Feather
-            name={showPassword ? "eye" : "eye-off"}
-            size={20}
-            color="#5C6988"
-          />
-        </Pressable>
-      </View>
+                    <Pressable
+                      onPress={() => setShowPassword((prev) => !prev)}
+                      hitSlop={10}
+                      style={styles.eyeIconWrapper}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        showPassword ? "Hide password" : "Show password"
+                      }
+                    >
+                      <Feather
+                        name={showPassword ? "eye" : "eye-off"}
+                        size={20}
+                        color="#5C6988"
+                      />
+                    </Pressable>
+                  </View>
 
-      {errors.password && (
-        <Text style={styles.errorText}>
-          {errors.password.message}
-        </Text>
-      )}
-    </>
-  )}
-/>
+                  {errors.password && (
+                    <Text style={styles.errorText}>
+                      {errors.password.message}
+                    </Text>
+                  )}
+                </>
+              )}
+            />
 
-{loginError ? (
-  <Text style={styles.loginErrorText}>
-    {loginError}
-  </Text>
-) : null}
+            {loginError ? (
+              <Text style={styles.loginErrorText}>{loginError}</Text>
+            ) : null}
 
-      {/* Submit Button: Login */}
-        <Pressable
-            style={({ pressed }) => [
+            {/* Submit Button: Login */}
+            <Pressable
+              style={({ pressed }) => [
                 styles.primaryButton,
                 pressed && styles.primaryButtonPressed,
               ]}
@@ -247,11 +411,64 @@ const handleLogin = async (data: LoginFormData) => {
               accessibilityRole="button"
               accessibilityLabel="Login"
             >
-            <Text style={styles.primaryButtonText}>Login</Text>
-            <View style={styles.buttonIconWrapper}>
+              <Text style={styles.primaryButtonText}>Login</Text>
+              <View style={styles.buttonIconWrapper}>
                 <Feather name="arrow-right" size={20} color="#FFFFFF" />
+              </View>
+            </Pressable>
+
+            {/* OR Divider */}
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+
+              <Text style={styles.dividerText}>OR</Text>
+
+              <View style={styles.dividerLine} />
             </View>
-        </Pressable>
+
+            {/* Google Sign-In Button */}
+{Platform.OS === "web" ? (
+  <div
+    style={{
+      width: "100%",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      position: "relative",
+      zIndex: 9999,
+      pointerEvents: "auto",
+    }}
+  >
+    <div
+      ref={googleButtonRef}
+      style={{
+        width: "300px",
+        height: "44px",
+        position: "relative",
+        zIndex: 10000,
+        pointerEvents: "auto",
+      }}
+    />
+  </div>
+) : (
+  <Pressable
+    style={({ pressed }) => [
+      styles.googleButton,
+      pressed && styles.googleButtonPressed,
+      googleLoading && styles.googleButtonDisabled,
+    ]}
+    onPress={handleGoogleLogin}
+    disabled={googleLoading}
+    accessibilityRole="button"
+    accessibilityLabel="Continue with Google"
+  >
+    <Text style={styles.googleIcon}>G</Text>
+
+    <Text style={styles.googleButtonText}>
+      {googleLoading ? "Signing in..." : "Continue with Google"}
+    </Text>
+  </Pressable>
+)}
 
             {/* Don't have an account? Register */}
             <View style={styles.registerRow}>
@@ -399,6 +616,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 32,
+    marginTop: 10,
   },
   dontHaveText: {
     fontSize: 14,
@@ -428,20 +646,74 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   inputError: {
-  borderWidth: 1,
-  borderColor: "#EF4444",
- },
- errorText: {
-  color: "#EF4444",
-  fontSize: 12,
-  marginTop: -8,
-  marginBottom: 10,
-  marginLeft: 4,
-},
-loginErrorText: {
-  color: "#DC2626",
-  fontSize: 13,
-  marginTop: 8,
-  marginBottom: 8,
-},
+    borderWidth: 1,
+    borderColor: "#EF4444",
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+  loginErrorText: {
+    color: "#DC2626",
+    fontSize: 13,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 18,
+  },
+
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E2E8F0",
+  },
+
+  dividerText: {
+    marginHorizontal: 14,
+    color: "#7B88A4",
+    fontSize: 12,
+    fontWeight: "500",
+  },
+
+  googleButton: {
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "#D8DEE9",
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+    marginBottom: 22,
+  },
+
+  googleButtonPressed: {
+    backgroundColor: "#F8FAFC",
+    transform: [{ scale: 0.99 }],
+  },
+
+  googleButtonDisabled: {
+    opacity: 0.6,
+  },
+
+  googleIcon: {
+    position: "absolute",
+    left: 24,
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#4285F4",
+  },
+
+  googleButtonText: {
+    color: "#0B1220",
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });

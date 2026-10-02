@@ -10,6 +10,13 @@ import API_BASE_URL from "@/services/api";
 import { useAuth } from "@/hooks/useAuth";
 import { renderGoogleButton } from "@/services/googleAuth.web";
 import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from "@/services/googleAuth.native";
+
+import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
@@ -164,6 +171,88 @@ const handleGoogleRegister = async (idToken: string) => {
     setRegisterError(
       "Unable to register with Google. Please try again."
     );
+  } finally {
+    setGoogleLoading(false);
+  }
+};
+
+const handleGoogleNativeRegister = async () => {
+  if (Platform.OS === "web") {
+    return;
+  }
+
+  try {
+    setRegisterError("");
+    setGoogleLoading(true);
+
+await GoogleSignin.hasPlayServices({
+  showPlayServicesUpdateDialog: true,
+});
+
+// Clear the previously selected Google account
+await GoogleSignin.signOut();
+
+// Open Google Sign-In again
+const response = await GoogleSignin.signIn();
+
+    if (!isSuccessResponse(response)) {
+      return;
+    }
+
+    const idToken = response.data.idToken;
+
+    if (!idToken) {
+      setRegisterError("Google did not return an ID token.");
+      return;
+    }
+
+    const apiResponse = await fetch(
+      `${API_BASE_URL}/auth/google`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+
+    const result = await apiResponse.json();
+
+    if (!apiResponse.ok) {
+      setRegisterError(
+        result.message || "Google registration failed."
+      );
+      return;
+    }
+
+    await login(result.user, result.token);
+
+    router.replace("/users");
+  } catch (error: unknown) {
+    console.error("Google native registration error:", error);
+
+    if (isErrorWithCode(error)) {
+      if (error.code === statusCodes.IN_PROGRESS) {
+        setRegisterError("Google Sign-In is already in progress.");
+      } else if (
+        error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE
+      ) {
+        setRegisterError(
+          "Google Play Services is not available or needs to be updated."
+        );
+      } else {
+        setRegisterError(
+          `Google Sign-In failed: ${error.code}`
+        );
+      }
+    } else {
+      setRegisterError(
+        error instanceof Error
+          ? error.message
+          : "Unable to register with Google."
+      );
+    }
   } finally {
     setGoogleLoading(false);
   }
@@ -450,7 +539,8 @@ useEffect(() => {
 </View>
 
 {/* Google Registration */}
-{Platform.OS === "web" && (
+{/* Google Registration */}
+{Platform.OS === "web" ? (
   <View
     style={{
       width: "100%",
@@ -467,6 +557,24 @@ useEffect(() => {
       }}
     />
   </View>
+) : (
+  <Pressable
+    style={({ pressed }) => [
+      styles.googleButton,
+      pressed && styles.googleButtonPressed,
+      googleLoading && styles.googleButtonDisabled,
+    ]}
+    onPress={handleGoogleNativeRegister}
+    disabled={googleLoading}
+    accessibilityRole="button"
+    accessibilityLabel="Continue with Google"
+  >
+    <Text style={styles.googleIcon}>G</Text>
+
+    <Text style={styles.googleButtonText}>
+      {googleLoading ? "Signing in..." : "Continue with Google"}
+    </Text>
+  </Pressable>
 )}
 
             {/* Already have an account? Login */}
@@ -675,5 +783,40 @@ dividerText: {
   fontSize: 13,
   color: "#7B88A4",
   fontWeight: "500",
+},
+googleButton: {
+  height: 56,
+  borderRadius: 28,
+  borderWidth: 1,
+  borderColor: "#D8DEE9",
+  backgroundColor: "#FFFFFF",
+  flexDirection: "row",
+  justifyContent: "center",
+  alignItems: "center",
+  position: "relative",
+  marginBottom: 22,
+},
+
+googleButtonPressed: {
+  backgroundColor: "#F8FAFC",
+  transform: [{ scale: 0.99 }],
+},
+
+googleButtonDisabled: {
+  opacity: 0.6,
+},
+
+googleIcon: {
+  position: "absolute",
+  left: 24,
+  fontSize: 20,
+  fontWeight: "700",
+  color: "#4285F4",
+},
+
+googleButtonText: {
+  color: "#0B1220",
+  fontSize: 16,
+  fontWeight: "600",
 },
 });

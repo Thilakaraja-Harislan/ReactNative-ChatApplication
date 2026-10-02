@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Temporary Android backup
+android-backup/
+
+# Android local/generated files
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+
+# Expo local files
+.expo/
+
+# Environment files
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary diagnostic files
+expo-autolinking.json
+rn-config.json
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

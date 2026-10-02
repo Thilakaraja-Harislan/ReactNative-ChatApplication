@@ -1,5 +1,12 @@
 import API_BASE_URL from "@/services/api";
 import { renderGoogleButton } from "@/services/googleAuth.web";
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  isSuccessResponse,
+  statusCodes,
+} from "@/services/googleAuth.native";
+
 import Feather from "@expo/vector-icons/Feather";
 import { yupResolver } from "@hookform/resolvers/yup";
 
@@ -107,9 +114,85 @@ export default function LoginScreen() {
   };
 
 const handleGoogleLogin = async () => {
-  setLoginError(
-    "Google Sign-In requires a development build. Please use email and password in Expo Go."
-  );
+  if (Platform.OS === "web") {
+    return;
+  }
+
+  try {
+    setLoginError("");
+    setGoogleLoading(true);
+
+await GoogleSignin.hasPlayServices({
+  showPlayServicesUpdateDialog: true,
+});
+
+// Clear the previously selected Google account
+await GoogleSignin.signOut();
+
+// Open Google Sign-In again
+const response = await GoogleSignin.signIn();
+
+    if (!isSuccessResponse(response)) {
+      return;
+    }
+
+    const idToken = response.data.idToken;
+
+    if (!idToken) {
+      setLoginError("Google did not return an ID token.");
+      return;
+    }
+
+    const apiResponse = await fetch(
+      `${API_BASE_URL}/auth/google`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      }
+    );
+
+    const result = await apiResponse.json();
+
+    if (!apiResponse.ok) {
+      setLoginError(
+        result.message || "Google authentication failed"
+      );
+      return;
+    }
+
+    await login(result.user, result.token);
+
+    router.replace("/users");
+  } catch (error: unknown) {
+    console.error("Google Sign-In error:", error);
+
+    if (isErrorWithCode(error)) {
+      if (error.code === statusCodes.IN_PROGRESS) {
+        setLoginError("Google Sign-In is already in progress.");
+      } else if (
+        error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE
+      ) {
+        setLoginError(
+          "Google Play Services is not available or needs to be updated."
+        );
+      } else {
+        setLoginError(
+          `Google Sign-In failed: ${error.code}`
+        );
+      }
+    } else {
+      setLoginError(
+        error instanceof Error
+          ? error.message
+          : "Unable to sign in with Google."
+      );
+    }
+  } finally {
+    setGoogleLoading(false);
+  }
 };
 
 const handleGoogleWebLogin = async (idToken: string) => {

@@ -1,10 +1,20 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, g
 from flask_cors import CORS
 
 from config.db import get_db_connection
+from routes.auth_routes import auth_bp
+from middleware.auth_middleware import authenticate_token
+
 
 app = Flask(__name__)
 CORS(app)
+
+
+# Register authentication routes
+app.register_blueprint(
+    auth_bp,
+    url_prefix="/api/auth"
+)
 
 
 @app.route("/", methods=["GET"])
@@ -53,6 +63,15 @@ def database_health_check():
 
         if connection is not None:
             connection.close()
+
+
+@app.route("/api/protected-test", methods=["GET"])
+@authenticate_token
+def protected_test():
+    return jsonify({
+        "message": "Protected route accessed successfully",
+        "user": g.user
+    }), 200
 
 
 if __name__ == "__main__":

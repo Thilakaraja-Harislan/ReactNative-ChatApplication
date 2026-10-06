@@ -6,13 +6,14 @@ from routes.auth_routes import auth_bp
 from routes.user_routes import user_bp
 from routes.message_routes import message_bp
 from middleware.auth_middleware import authenticate_token
-from flask_socketio import SocketIO, join_room
+from flask_socketio import join_room
+from extensions import socketio
 
 
 app = Flask(__name__)
 CORS(app)
 
-socketio = SocketIO(
+socketio.init_app(
     app,
     cors_allowed_origins="*"
 )

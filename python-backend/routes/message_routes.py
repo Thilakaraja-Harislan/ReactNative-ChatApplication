@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request, g
 
 from config.db import get_db_connection
 from middleware.auth_middleware import authenticate_token
+from extensions import socketio
 
 
 message_bp = Blueprint("messages", __name__)
@@ -75,6 +76,16 @@ def send_message():
             "receiverId": receiver_id_number,
             "message": cleaned_message
         }
+
+        socketio.emit(
+            "new-message",
+            saved_message,
+            to=f"user:{receiver_id_number}"
+        )
+
+        print(
+            f"Real-time message emitted to user {receiver_id_number}"
+        )
 
         return jsonify({
             "message": "Message sent successfully",
